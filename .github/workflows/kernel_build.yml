@@ -23,11 +23,11 @@ on:
         description: 'Clang toolchain branch'
         required: true
         default: 'master'
-      # ⚠️ Replaced the nonexistent toolchain with a reliable alternative
+      # ⚠️ Replaced with a widely-used GCC cross-compiler from a stable source
       gcc_repo:
         description: 'GCC toolchain repository'
         required: true
-        default: 'toolchain-builder/gcc-arm64' 
+        default: 'android-linux-compiler/aarch64-linux-gnu-gcc'
       gcc_branch:
         description: 'GCC toolchain branch'
         required: true
