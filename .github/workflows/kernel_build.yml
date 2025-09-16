@@ -15,15 +15,23 @@ on:
         description: 'Kernel defconfig name'
         required: true
         default: 'hanoip_defconfig'
-      # ⚠️ Replaced the non-existent toolchain with a known working one (Proton Clang)
-      toolchain_repo:
-        description: 'Toolchain repository'
+      # New: Specify Clang and GCC repos separately
+      clang_repo:
+        description: 'Clang toolchain repository'
         required: true
         default: 'kdrag0n/proton-clang' 
-      toolchain_branch:
-        description: 'Toolchain branch'
+      clang_branch:
+        description: 'Clang toolchain branch'
         required: true
         default: 'master'
+      gcc_repo:
+        description: 'GCC toolchain repository'
+        required: true
+        default: 'arter97/aarch64-linux-gnu' # A common GCC cross-compiler for ARM64
+      gcc_branch:
+        description: 'GCC toolchain branch'
+        required: true
+        default: 'main'
 
 jobs:
   build_kernel:
@@ -46,20 +54,30 @@ jobs:
       - name: 🛠️ Setup Build Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y git build-essential flex bison libssl-dev libelf-dev ccache bc libz-dev wget
+          sudo apt-get install -y git build-essential flex bison libssl-dev libelf-dev ccache bc libz-dev wget python3
 
-      - name: ⚙️ Checkout Toolchain
+      # New: Checkout Clang toolchain
+      - name: ⚙️ Checkout Clang Toolchain
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.event.inputs.toolchain_repo }}
-          ref: ${{ github.event.inputs.toolchain_branch }}
-          path: toolchain
+          repository: ${{ github.event.inputs.clang_repo }}
+          ref: ${{ github.event.inputs.clang_branch }}
+          path: clang-toolchain
+
+      # New: Checkout GCC toolchain (needed for GCC-specific kernel components)
+      - name: ⚙️ Checkout GCC Toolchain
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.gcc_repo }}
+          ref: ${{ github.event.inputs.gcc_branch }}
+          path: gcc-toolchain
 
       - name: ⚙️ Set up Environment Variables
         run: |
-          echo "PATH=$(pwd)/toolchain/bin:$PATH" >> $GITHUB_ENV
+          echo "PATH=$(pwd)/clang-toolchain/bin:$(pwd)/gcc-toolchain/bin:$PATH" >> $GITHUB_ENV
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "SUBARCH=arm64" >> $GITHUB_ENV
+          # Specify both the cross-compiler and the main compiler
           echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
           echo "CROSS_COMPILE_COMPAT=arm-linux-gnueabi-" >> $GITHUB_ENV
           echo "CC=clang" >> $GITHUB_ENV
