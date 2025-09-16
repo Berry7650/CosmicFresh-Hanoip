@@ -15,22 +15,15 @@ on:
         description: 'Kernel defconfig name'
         required: true
         default: 'hanoip_defconfig'
-      clang_repo:
-        description: 'Clang toolchain repository'
+      # ⚠️ Using a single, all-in-one AOSP Clang toolchain
+      toolchain_repo:
+        description: 'Toolchain repository'
         required: true
-        default: 'kdrag0n/proton-clang'
-      clang_branch:
-        description: 'Clang toolchain branch'
+        default: 'https://github.com/aosp-mirror/platform_prebuilts_clang_host_linux-x86'
+      toolchain_branch:
+        description: 'Toolchain branch'
         required: true
         default: 'master'
-      gcc_repo:
-        description: 'GCC toolchain repository'
-        required: true
-        default: 'LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android'
-      gcc_branch:
-        description: 'GCC toolchain branch'
-        required: true
-        default: 'main'
 
 jobs:
   build_kernel:
@@ -55,23 +48,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y git build-essential flex bison libssl-dev libelf-dev ccache bc libz-dev wget python3
 
-      - name: ⚙️ Checkout Clang Toolchain
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.event.inputs.clang_repo }}
-          ref: ${{ github.event.inputs.clang_branch }}
-          path: clang-toolchain
-
-      - name: ⚙️ Checkout GCC Toolchain
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.event.inputs.gcc_repo }}
-          ref: ${{ github.event.inputs.gcc_branch }}
-          path: gcc-toolchain
+      - name: ⚙️ Clone Toolchain
+        run: |
+          git clone --depth=1 --single-branch -b ${{ github.event.inputs.toolchain_branch }} ${{ github.event.inputs.toolchain_repo }} toolchain
 
       - name: ⚙️ Set up Environment Variables
         run: |
-          echo "PATH=$(pwd)/clang-toolchain/bin:$(pwd)/gcc-toolchain/bin:$PATH" >> $GITHUB_ENV
+          export PATH=$(pwd)/toolchain/bin:$PATH
+          
+          # Find the actual path to the GCC cross-compiler inside the Clang toolchain
+          GCC_PATH=$(find "$(pwd)/toolchain" -name "aarch64-linux-gnu-gcc" -type f | xargs dirname)
+          
+          echo "PATH=$GCC_PATH:$PATH" >> $GITHUB_ENV
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "SUBARCH=arm64" >> $GITHUB_ENV
           echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
