@@ -54,14 +54,17 @@ jobs:
           ref: ${{ github.event.inputs.clang_branch }}
           path: clang-toolchain
 
-      - name: ⚙️ Clone LineageOS GCC Toolchains
-        run: |
-          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc64
-          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 gcc32
-
+      - name: ⚙️ Checkout GCC Host Toolchain
+        uses: actions/checkout@v4
+        with:
+          repository: 'LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9'
+          path: gcc-host-toolchain
+          
       - name: ⚙️ Set up Environment Variables
         run: |
-          echo "PATH=$(pwd)/clang-toolchain/bin:$(pwd)/gcc64/bin:$(pwd)/gcc32/bin:$PATH" >> $GITHUB_ENV
+          # Prioritize system linker and native compilers for host tools
+          echo "PATH=/usr/bin:$(pwd)/clang-toolchain/bin:$(pwd)/gcc-host-toolchain/bin:$PATH" >> $GITHUB_ENV
+          
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "SUBARCH=arm64" >> $GITHUB_ENV
           echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
