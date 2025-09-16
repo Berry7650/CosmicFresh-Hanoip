@@ -1,77 +1,118 @@
-name: Build Gaming Kernel with KSU + SusfOS
+name: Custom Kernel Build with Toolchain Fallbacks
 
 on:
   workflow_dispatch:
+    inputs:
+      kernel_repo:
+        description: 'Kernel source repository'
+        required: true
+        default: 'Dark-Matter7232/CosmicFresh-Hanoip'
+      kernel_branch:
+        description: 'Kernel source branch'
+        required: true
+        default: 'main'
+      defconfig_name:
+        description: 'Kernel defconfig name'
+        required: true
+        default: 'hanoip_defconfig'
 
 jobs:
-  build:
+  build_kernel:
     runs-on: ubuntu-latest
-
+    
     steps:
-    - name: 🚀 Checkout Kernel Source
-      uses: actions/checkout@v4
-      with:
-        repository: Dark-Matter7232/CosmicFresh-Hanoip
-        ref: main
-        path: kernel
+      - name: 🚀 Checkout Kernel Source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.kernel_repo }}
+          ref: ${{ github.event.inputs.kernel_branch }}
+          path: kernel_source
 
-    - name: 📦 Checkout AnyKernel3
-      uses: actions/checkout@v4
-      with:
-        repository: osm0sis/AnyKernel3
-        path: anykernel
+      - name: 📦 Checkout AnyKernel3
+        uses: actions/checkout@v4
+        with:
+          repository: 'osm0sis/AnyKernel3'
+          path: anykernel3
 
-    - name: 🛠️ Install Dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y bc bison flex libssl-dev libelf-dev build-essential ccache wget python3 zlib1g-dev
+      - name: 🛠️ Setup Build Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git build-essential flex bison libssl-dev libelf-dev ccache bc libz-dev wget xz-utils python3
 
-    - name: ⚙️ Clone Proton Clang
-      run: |
-        git clone --depth=1 https://github.com/kdrag0n/proton-clang clang
+      - name: ⚙️ Get Toolchain (Attempt 1: Proton Clang)
+        id: toolchain_step_1
+        continue-on-error: true
+        run: |
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang toolchain
+          
+      - name: ⚙️ Get Toolchain (Attempt 2: Arter97 GCC)
+        if: steps.toolchain_step_1.outcome != 'success'
+        id: toolchain_step_2
+        continue-on-error: true
+        run: |
+          git clone --depth=1 https://github.com/arter97/aarch64-linux-gnu toolchain
 
-    - name: ⚙️ Clone LineageOS GCC Toolchains
-      run: |
-        git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc64
-        git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 gcc32
+      - name: ⚙️ Get Toolchain (Attempt 3: LineageOS GCC)
+        if: steps.toolchain_step_2.outcome != 'success'
+        id: toolchain_step_3
+        continue-on-error: true
+        run: |
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android toolchain
 
-    - name: 🔧 Apply KernelSU Patch
-      run: |
-        git clone https://github.com/tiann/KernelSU
-        python3 KernelSU/update_kernel.py kernel
+      - name: ⚙️ Get Toolchain (Attempt 4: Shubhamvis98 GCC)
+        if: steps.toolchain_step_3.outcome != 'success'
+        id: toolchain_step_4
+        continue-on-error: true
+        run: |
+          git clone --depth=1 https://github.com/Shubhamvis98/toolchains toolchain
 
-    - name: 🔧 Apply SusfOS Patch
-      run: |
-        git clone https://github.com/SuS-Fusion/susfos-patches
-        cd susfos-patches
-        bash apply.sh ../kernel
+      - name: ⚙️ Get Toolchain (Attempt 5: Linaro Direct Download)
+        if: steps.toolchain_step_4.outcome != 'success'
+        id: toolchain_step_5
+        continue-on-error: true
+        run: |
+          wget https://releases.linaro.org/components/toolchain/binaries/7.5-2019.12/aarch64-linux-gnu/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu.tar.xz
+          mkdir toolchain
+          tar -xf gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu.tar.xz -C toolchain --strip-components=1
 
-    - name: ⚙️ Set Environment Variables
-      run: |
-        echo "PATH=$PWD/clang/bin:$PWD/gcc64/bin:$PWD/gcc32/bin:$PATH" >> $GITHUB_ENV
-        echo "ARCH=arm64" >> $GITHUB_ENV
-        echo "SUBARCH=arm64" >> $GITHUB_ENV
-        echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
-        echo "CROSS_COMPILE_ARM32=arm-linux-androideabi-" >> $GITHUB_ENV
-        echo "CC=clang" >> $GITHUB_ENV
+      - name: ⚙️ Final Check for Toolchain
+        run: |
+          if [ ! -d "toolchain" ]; then
+            echo "Error: Failed to get any toolchain. Please check the repositories."
+            exit 1
+          fi
 
-    - name: 💻 Build Kernel
-      run: |
-        cd kernel
-        make O=out hanoip_defconfig
-        make -j$(nproc --all) O=out \
-          CC=clang \
-          CROSS_COMPILE=aarch64-linux-android- \
-          CROSS_COMPILE_ARM32=arm-linux-androideabi-
+      - name: ⚙️ Set up Environment Variables
+        run: |
+          # Dynamically set the PATH based on the toolchain found
+          TOOLCHAIN_BIN=$(find "$(pwd)/toolchain" -name "clang" -type f | xargs dirname)
+          if [ -z "$TOOLCHAIN_BIN" ]; then
+            TOOLCHAIN_BIN=$(find "$(pwd)/toolchain" -name "aarch64-linux-gnu-gcc" -type f | xargs dirname)
+          fi
+          
+          echo "PATH=$TOOLCHAIN_BIN:$PATH" >> $GITHUB_ENV
+          echo "ARCH=arm64" >> $GITHUB_ENV
+          echo "SUBARCH=arm64" >> $GITHUB_ENV
+          echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
+          echo "CROSS_COMPILE_COMPAT=arm-linux-gnueabi-" >> $GITHUB_ENV
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
+          
+      - name: 💻 Build Kernel
+        id: build_step
+        run: |
+          cd kernel_source
+          make O=out ${{ github.event.inputs.defconfig_name }}
+          make O=out -j$(nproc --all)
 
-    - name: 📦 Package with AnyKernel3
-      run: |
-        cp kernel/out/arch/arm64/boot/Image.gz-dtb anykernel/zImage
-        cd anykernel
-        zip -r9 GamingKernel-KSU-SusfOS.zip * -x "*.git*"
-
-    - name: ⬆️ Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: GamingKernel-KSU-SusfOS
-        path: anykernel/GamingKernel-KSU-SusfOS.zip
+      - name: 📦 Package with AnyKernel3
+        run: |
+          cd anykernel3
+          cp ../kernel_source/out/arch/arm64/boot/Image.gz-dtb .
+          zip -r9 ${{ github.event.repository.name }}_${{ github.sha }}.zip . -x .git
+          
+      - name: ⬆️ Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: custom-kernel
+          path: anykernel3/*.zip
