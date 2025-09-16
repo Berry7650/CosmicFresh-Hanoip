@@ -54,15 +54,20 @@ jobs:
           ref: ${{ github.event.inputs.clang_branch }}
           path: clang-toolchain
           
+      - name: ⚙️ Clone GCC Toolchains
+        run: |
+          # Checkout 64-bit GCC
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc64
+          # Checkout 32-bit GCC
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 gcc32
+
       - name: ⚙️ Set up Environment Variables
         run: |
-          # ⚠️ Use the system's default linker for host tools
-          echo "PATH=/usr/bin:$(pwd)/clang-toolchain/bin:$PATH" >> $GITHUB_ENV
-          
+          echo "PATH=/usr/bin:$(pwd)/clang-toolchain/bin:$(pwd)/gcc64/bin:$(pwd)/gcc32/bin:$PATH" >> $GITHUB_ENV
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "SUBARCH=arm64" >> $GITHUB_ENV
-          echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
-          echo "CROSS_COMPILE_COMPAT=arm-linux-gnueabi-" >> $GITHUB_ENV
+          echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
+          echo "CROSS_COMPILE_ARM32=arm-linux-androideabi-" >> $GITHUB_ENV
           echo "CC=clang" >> $GITHUB_ENV
           echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
           
