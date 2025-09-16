@@ -27,7 +27,7 @@ on:
       gcc_repo:
         description: 'GCC toolchain repository'
         required: true
-        default: 'LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android'
+        default: 'LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9'
       gcc_branch:
         description: 'GCC toolchain branch'
         required: true
