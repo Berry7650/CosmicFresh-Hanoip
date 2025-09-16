@@ -15,7 +15,6 @@ on:
         description: 'Kernel defconfig name'
         required: true
         default: 'hanoip_defconfig'
-      # Using a reliable Clang toolchain
       clang_repo:
         description: 'Clang toolchain repository'
         required: true
@@ -24,11 +23,11 @@ on:
         description: 'Clang toolchain branch'
         required: true
         default: 'master'
-      # Using a separate, well-known GCC cross-compiler for compatibility
+      # ⚠️ Replaced the non-existent GCC toolchain with a reliable alternative
       gcc_repo:
         description: 'GCC toolchain repository'
         required: true
-        default: 'LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android'
+        default: 'arter97/aarch64-linux-gnu' # A known, albeit older, GCC prebuilt
       gcc_branch:
         description: 'GCC toolchain branch'
         required: true
@@ -73,7 +72,6 @@ jobs:
 
       - name: ⚙️ Set up Environment Variables
         run: |
-          # Add both toolchain bin directories to the PATH
           echo "PATH=$(pwd)/clang-toolchain/bin:$(pwd)/gcc-toolchain/bin:$PATH" >> $GITHUB_ENV
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "SUBARCH=arm64" >> $GITHUB_ENV
