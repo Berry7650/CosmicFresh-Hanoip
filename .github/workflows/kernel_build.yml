@@ -62,13 +62,12 @@ jobs:
           
       - name: ⚙️ Set up Environment Variables
         run: |
-          # Prioritize system linker and native compilers for host tools
-          echo "PATH=/usr/bin:$(pwd)/clang-toolchain/bin:$(pwd)/gcc-host-toolchain/bin:$PATH" >> $GITHUB_ENV
-          
+          echo "PATH=$(pwd)/clang-toolchain/bin:$(pwd)/gcc-host-toolchain/bin:$PATH" >> $GITHUB_ENV
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "SUBARCH=arm64" >> $GITHUB_ENV
           echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
-          echo "CROSS_COMPILE_COMPAT=arm-linux-androideabi-" >> $GITHUB_ENV
+          # ⚠️ Added the missing CROSS_COMPILE_ARM32 variable
+          echo "CROSS_COMPILE_ARM32=arm-linux-androideabi-" >> $GITHUB_ENV
           echo "CC=clang" >> $GITHUB_ENV
           echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
           
