@@ -7,7 +7,7 @@ on:
       kernel_repo:
         description: 'Kernel source repository'
         required: true
-        default: 'https://github.com/Dark-Matter7232/CosmicFresh-Hanoip'
+        default: 'Dark-Matter7232/CosmicFresh-Hanoip' # Corrected format
       kernel_branch:
         description: 'Kernel source branch'
         required: true
@@ -19,7 +19,7 @@ on:
       toolchain_repo:
         description: 'Toolchain repository'
         required: true
-        default: 'https://github.com/AOSiP-Devices/clang-toolchains'
+        default: 'AOSiP-Devices/clang-toolchains' # Corrected format
       toolchain_branch:
         description: 'Toolchain branch'
         required: true
@@ -40,7 +40,7 @@ jobs:
       - name: 📦 Checkout AnyKernel3
         uses: actions/checkout@v4
         with:
-          repository: 'https://github.com/osm0sis/AnyKernel3'
+          repository: 'osm0sis/AnyKernel3' # Corrected format
           path: anykernel3
 
       - name: 🛠️ Setup Build Environment
@@ -49,8 +49,11 @@ jobs:
           sudo apt-get install -y git build-essential flex bison libssl-dev libelf-dev ccache bc libz-dev wget
 
       - name: ⚙️ Clone Toolchain
-        run: |
-          git clone --depth=1 --single-branch -b ${{ github.event.inputs.toolchain_branch }} ${{ github.event.inputs.toolchain_repo }} toolchain
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.toolchain_repo }}
+          ref: ${{ github.event.inputs.toolchain_branch }}
+          path: toolchain
 
       - name: ⚙️ Set up Environment Variables
         run: |
@@ -83,3 +86,9 @@ jobs:
         with:
           name: custom-kernel
           path: anykernel3/*.zip
+          
+---
+The video provides a high-level overview of how to use the `actions/checkout` action within a GitHub Actions workflow.
+
+[How to use actions/checkout in GitHub Actions](https://www.youtube.com/watch?v=nAK3mFRxfFA)
+http://googleusercontent.com/youtube_content/13
