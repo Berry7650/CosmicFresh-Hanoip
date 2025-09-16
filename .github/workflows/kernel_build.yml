@@ -39,7 +39,7 @@ jobs:
       run: |
         git clone https://github.com/tiann/KernelSU
         cd KernelSU
-        bash install.sh ../kernel
+        python3 update_kernel.py ../kernel
 
     - name: 🔧 Apply SusfOS Patch
       run: |
