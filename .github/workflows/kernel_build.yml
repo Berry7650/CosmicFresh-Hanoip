@@ -15,7 +15,6 @@ on:
         description: 'Kernel defconfig name'
         required: true
         default: 'hanoip_defconfig'
-      # ⚠️ Reverting to the reliable Proton Clang toolchain
       toolchain_repo:
         description: 'Toolchain repository'
         required: true
@@ -49,16 +48,17 @@ jobs:
           sudo apt-get install -y git build-essential flex bison libssl-dev libelf-dev ccache bc libz-dev wget python3
 
       - name: ⚙️ Clone Toolchain
-        run: |
-          git clone --depth=1 --single-branch -b ${{ github.event.inputs.toolchain_branch }} https://github.com/${{ github.event.inputs.toolchain_repo }} toolchain
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.toolchain_repo }}
+          ref: ${{ github.event.inputs.toolchain_branch }}
+          path: toolchain
 
       - name: ⚙️ Set up Environment Variables
         run: |
-          # The Proton Clang toolchain is structured differently.
-          # We need to find the bin directory dynamically.
-          TOOLCHAIN_BIN=$(find "$(pwd)/toolchain" -name "clang" -type f | xargs dirname)
-          
-          echo "PATH=$TOOLCHAIN_BIN:$PATH" >> $GITHUB_ENV
+          # ⚠️ Directly set the path to the bin directory
+          # The Proton Clang toolchain's binaries are usually in toolchain/bin
+          echo "PATH=$(pwd)/toolchain/bin:$PATH" >> $GITHUB_ENV
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "SUBARCH=arm64" >> $GITHUB_ENV
           echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
