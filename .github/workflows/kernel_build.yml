@@ -63,11 +63,10 @@ jobs:
         run: |
           echo "PATH=/usr/bin:$(pwd)/clang-toolchain/bin:$(pwd)/gcc64/bin:$(pwd)/gcc32/bin:$PATH" >> $GITHUB_ENV
           
-          # Fix Python 3 compatibility issues in gcc-wrapper.py
-          # Convert Python 2 print statements to Python 3 syntax
-          sed -i 's/print\( \)\?>>\( \)\?sys\.stderr,\( \)\?\(.*\)/print(\4, file=sys.stderr)/g' ./kernel_source/scripts/gcc-wrapper.py
+          # ⚠️ FIX 1: Patch Python 2 print syntax to Python 3, avoiding extra commas.
+          sed -i -e 's/print >> sys.stderr, /print(/g' -e 's/,$/)/g' ./kernel_source/scripts/gcc-wrapper.py
           
-          # Decode byte strings to handle Python 3 subprocess output
+          # ⚠️ FIX 2: Patch byte string issues for Python 3 compatibility.
           sed -i 's/line\.rstrip('\''\\n'\'')/line.decode('\''utf-8'\'').rstrip('\''\\n'\'')/g' ./kernel_source/scripts/gcc-wrapper.py
           
           echo "ARCH=arm64" >> $GITHUB_ENV
@@ -80,22 +79,20 @@ jobs:
       - name: 💻 Configure Kernel & Apply Fixes
         run: |
           cd kernel_source
-          
-          # Remove unsupported -mcpu flags
+          # ⚠️ FIX 3: Remove unsupported -mcpu flags
           sed -i '/-mcpu/d' Makefile
           
-          # Create output directory and generate initial config
+          # This command creates the 'out' directory and the initial .config file
           make O=out ${{ github.event.inputs.defconfig_name }}
           
-          # Disable problematic stack protector option
+          # Fix compiler flag issues by disabling unsupported stack protector
           sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/CONFIG_CC_STACKPROTECTOR_STRONG=n/g' out/.config
-          sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' out/.config
-
+          
       - name: 💻 Build Kernel
         id: build_step
         run: |
           cd kernel_source
-          # Build with all available cores
+          # The build now starts with the corrected files and configuration
           make O=out -j$(nproc --all)
 
       - name: 📦 Package with AnyKernel3
