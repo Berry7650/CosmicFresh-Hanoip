@@ -63,9 +63,8 @@ jobs:
         run: |
           echo "PATH=/usr/bin:$(pwd)/clang-toolchain/bin:$(pwd)/gcc64/bin:$(pwd)/gcc32/bin:$PATH" >> $GITHUB_ENV
           
-          # ⚠️ FIX: Patch all Python 2 print syntax in gcc-wrapper.py
-          sed -i 's/print >> sys.stderr, args[0] + \x27:\x27,e.strerror/print(args[0] + \x27:\x27, e.strerror, file=sys.stderr)/g' ./kernel_source/scripts/gcc-wrapper.py
-          sed -i 's/print >> sys.stderr, line/print(line, file=sys.stderr)/g' ./kernel_source/scripts/gcc-wrapper.py
+          # ⚠️ FIX: Patch gcc-wrapper.py for Python 3 string/bytes compatibility
+          sed -i 's/line.rstrip('\''\\n'\'')/line.decode('\''utf-8'\'').rstrip('\''\\n'\'')/g' ./kernel_source/scripts/gcc-wrapper.py
           
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "SUBARCH=arm64" >> $GITHUB_ENV
@@ -77,6 +76,9 @@ jobs:
       - name: 💻 Configure Kernel & Apply Fixes
         run: |
           cd kernel_source
+          # ⚠️ FIX: Remove unsupported -mcpu flag
+          sed -i 's/-mcpu=cortex-a76.cortex-a55+crypto//g' Makefile
+          
           make O=out ${{ github.event.inputs.defconfig_name }}
           
           sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/CONFIG_CC_STACKPROTECTOR_STRONG=n/g' out/.config
