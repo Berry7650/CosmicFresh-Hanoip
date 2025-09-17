@@ -63,11 +63,24 @@ jobs:
         run: |
           echo "PATH=/usr/bin:$(pwd)/clang-toolchain/bin:$(pwd)/gcc64/bin:$(pwd)/gcc32/bin:$PATH" >> $GITHUB_ENV
           
-          # ⚠️ FIX 1: Patch Python 2 print syntax to Python 3 with a safer regex.
-          sed -i 's/print\s*>>\s*sys\.stderr,\s*\(.*\)/print(\1, file=sys.stderr)/g' ./kernel_source/scripts/gcc-wrapper.py
+          # First, let's check what the original line 79 looks like
+          echo "Original line 79:"
+          sed -n '79p' ./kernel_source/scripts/gcc-wrapper.py
           
-          # ⚠️ FIX 2: Patch byte string issues for Python 3 compatibility.
+          # Fix Python 3 compatibility issues in gcc-wrapper.py
+          # Use a more precise approach to handle the print statement conversion
+          # First, let's fix the specific line that's causing issues
+          sed -i '79s/print >> sys.stderr, \(.*\)/print(\1, file=sys.stderr)/' ./kernel_source/scripts/gcc-wrapper.py
+          
+          # Fix any other print statements in the file
+          sed -i 's/print >> sys.stderr, \(.*\)/print(\1, file=sys.stderr)/g' ./kernel_source/scripts/gcc-wrapper.py
+          
+          # Fix 2: Decode byte strings to handle Python 3 subprocess output
           sed -i 's/line\.rstrip('\''\\n'\'')/line.decode('\''utf-8'\'').rstrip('\''\\n'\'')/g' ./kernel_source/scripts/gcc-wrapper.py
+          
+          # Verify the fix
+          echo "Fixed line 79:"
+          sed -n '79p' ./kernel_source/scripts/gcc-wrapper.py
           
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "SUBARCH=arm64" >> $GITHUB_ENV
@@ -79,20 +92,22 @@ jobs:
       - name: 💻 Configure Kernel & Apply Fixes
         run: |
           cd kernel_source
-          # ⚠️ FIX 3: Remove unsupported -mcpu flags
+          
+          # Remove unsupported -mcpu flags
           sed -i '/-mcpu/d' Makefile
           
-          # This command creates the 'out' directory and the initial .config file
+          # Create output directory and generate initial config
           make O=out ${{ github.event.inputs.defconfig_name }}
           
-          # Fix compiler flag issues by disabling unsupported stack protector
+          # Disable problematic stack protector option
           sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/CONFIG_CC_STACKPROTECTOR_STRONG=n/g' out/.config
-          
+          sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' out/.config
+
       - name: 💻 Build Kernel
         id: build_step
         run: |
           cd kernel_source
-          # The build now starts with the corrected files and configuration
+          # Build with all available cores
           make O=out -j$(nproc --all)
 
       - name: 📦 Package with AnyKernel3
