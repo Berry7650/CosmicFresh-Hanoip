@@ -63,9 +63,9 @@ jobs:
         run: |
           echo "PATH=/usr/bin:$(pwd)/clang-toolchain/bin:$(pwd)/gcc64/bin:$(pwd)/gcc32/bin:$PATH" >> $GITHUB_ENV
           
-          # Fix Python 2 print syntax and byte string issues in gcc-wrapper.py
-          sed -i 's/print >> sys.stderr, \([^,]\+\)\(,\)\?/print(\1, file=sys.stderr)/g' ./kernel_source/scripts/gcc-wrapper.py
-          sed -i 's/line.rstrip('\''\\n'\'')/line.decode('\''utf-8'\'').rstrip('\''\\n'\'')/g' ./kernel_source/scripts/gcc-wrapper.py
+          # ⚠️ FIX: Patch all Python 2 print syntax and byte string issues in gcc-wrapper.py
+          sed -i 's/print\( \)\?>>\( \)\?sys\.stderr,\( \)\?\(.*\)/print(\4, file=sys.stderr)/g' ./kernel_source/scripts/gcc-wrapper.py
+          sed -i 's/line\.rstrip('\''\\n'\'')/line.decode('\''utf-8'\'').rstrip('\''\\n'\'')/g' ./kernel_source/scripts/gcc-wrapper.py
           
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "SUBARCH=arm64" >> $GITHUB_ENV
@@ -77,10 +77,10 @@ jobs:
       - name: 💻 Configure Kernel & Apply Fixes
         run: |
           cd kernel_source
-          # Remove unsupported -mcpu flags
+          # ⚠️ FIX: Remove unsupported -mcpu flags
           sed -i '/-mcpu/d' Makefile
           
-          # Create the initial .config file
+          # This command creates the 'out' directory and the initial .config file
           make O=out ${{ github.event.inputs.defconfig_name }}
           
           # Fix compiler flag issues by disabling unsupported stack protector
