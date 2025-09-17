@@ -1,10 +1,12 @@
-name: Custom Kernel Build
+# GitHub Actions Workflow: Enhanced Custom Kernel Build
+
+name: Enhanced Custom Kernel Build
 
 on:
   workflow_dispatch:
     inputs:
       kernel_repo:
-        description: 'Kernel source repository'
+        description: 'Kernel source repository (e.g., user/repo)'
         required: true
         default: 'Dark-Matter7232/CosmicFresh-Hanoip'
       kernel_branch:
@@ -12,112 +14,139 @@ on:
         required: true
         default: 'main'
       defconfig_name:
-        description: 'Kernel defconfig name'
+        description: 'Kernel defconfig file name'
         required: true
         default: 'hanoip_defconfig'
       clang_repo:
-        description: 'Clang toolchain repository'
+        description: 'Clang toolchain repository (e.g., user/repo)'
         required: true
         default: 'kdrag0n/proton-clang'
       clang_branch:
         description: 'Clang toolchain branch'
         required: true
         default: 'master'
+      zip_name:
+        description: 'Name of the final flashable zip (without .zip)'
+        required: true
+        default: 'CosmicFresh-Hanoip-Kernel'
+      image_name:
+        description: 'Name of the kernel image to package'
+        required: true
+        default: 'Image.gz-dtb' # Common alternatives: Image.gz, Image
+      apply_legacy_fixes:
+        description: 'Apply specific patches for older kernel sources?'
+        type: boolean
+        default: true
+
+# Centralized environment variables for the job
+env:
+  TZ: "Asia/Kolkata" # Set timezone for accurate timestamps
 
 jobs:
   build_kernel:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     
     steps:
-      - name: 🚀 Checkout Kernel Source
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.event.inputs.kernel_repo }}
-          ref: ${{ github.event.inputs.kernel_branch }}
-          path: kernel_source
+      - name: ⏱️ Initialize Build Environment
+        run: echo "BUILD_START_TIME=$(date +%s)" >> $GITHUB_ENV
 
-      - name: 📦 Checkout AnyKernel3
-        uses: actions/checkout@v4
-        with:
-          repository: 'osm0sis/AnyKernel3'
-          path: anykernel3
-
-      - name: 🛠️ Setup Build Environment
+      - name: 📦 Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y git build-essential flex bison libssl-dev libelf-dev ccache bc libz-dev wget python3
+          sudo apt-get install -y --no-install-recommends \
+            git build-essential flex bison libssl-dev libelf-dev ccache bc libz-dev wget python3 zip
 
-      - name: ⚙️ Checkout Clang Toolchain
-        uses: actions/checkout@v4
+      - name: ⚡ Setup Toolchain Caching
+        uses: actions/cache@v4
+        id: toolchain-cache
         with:
-          repository: ${{ github.event.inputs.clang_repo }}
-          ref: ${{ github.event.inputs.clang_branch }}
-          path: clang-toolchain
-          
-      - name: ⚙️ Clone GCC Toolchains
+          path: |
+            clang-toolchain
+            gcc64
+            gcc32
+          key: toolchain-${{ runner.os }}-${{ github.event.inputs.clang_repo }}-${{ github.event.inputs.clang_branch }}
+
+      - name: ⚙️ Download Toolchains (if not cached)
+        if: steps.toolchain-cache.outputs.cache-hit != 'true'
         run: |
+          echo "Cache not found. Cloning toolchains..."
+          git clone --depth=1 https://github.com/${{ github.event.inputs.clang_repo }} -b ${{ github.event.inputs.clang_branch }} clang-toolchain
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc64
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 gcc32
-
-      - name: ⚙️ Set up Environment Variables & Apply Fixes
+        
+      - name: 📚 Checkout Kernel and AnyKernel3 Sources
         run: |
-          echo "PATH=/usr/bin:$(pwd)/clang-toolchain/bin:$(pwd)/gcc64/bin:$(pwd)/gcc32/bin:$PATH" >> $GITHUB_ENV
+          git clone --depth=1 https://github.com/${{ github.event.inputs.kernel_repo }} -b ${{ github.event.inputs.kernel_branch }} kernel_source
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3 anykernel3
+
+      - name: 🔧 Set up Build Environment Variables
+        run: |
+          echo "Setting up environment variables..."
+          # Add toolchains to PATH
+          echo "PATH=$(pwd)/clang-toolchain/bin:$(pwd)/gcc64/bin:$(pwd)/gcc32/bin:$PATH" >> $GITHUB_ENV
           
-          # First, let's check what the original line 79 looks like
-          echo "Original line 79:"
-          sed -n '79p' ./kernel_source/scripts/gcc-wrapper.py
-          
-          # Fix Python 3 compatibility issues in gcc-wrapper.py
-          # Use a more precise approach to handle the print statement conversion
-          # First, let's fix the specific line that's causing issues
-          sed -i '79s/print >> sys.stderr, \(.*\)/print(\1, file=sys.stderr)/' ./kernel_source/scripts/gcc-wrapper.py
-          
-          # Fix any other print statements in the file
-          sed -i 's/print >> sys.stderr, \(.*\)/print(\1, file=sys.stderr)/g' ./kernel_source/scripts/gcc-wrapper.py
-          
-          # Fix 2: Decode byte strings to handle Python 3 subprocess output
-          sed -i 's/line\.rstrip('\''\\n'\'')/line.decode('\''utf-8'\'').rstrip('\''\\n'\'')/g' ./kernel_source/scripts/gcc-wrapper.py
-          
-          # Verify the fix
-          echo "Fixed line 79:"
-          sed -n '79p' ./kernel_source/scripts/gcc-wrapper.py
-          
+          # Set kernel build variables
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "SUBARCH=arm64" >> $GITHUB_ENV
-          echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
+          echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
           echo "CROSS_COMPILE_ARM32=arm-linux-androideabi-" >> $GITHUB_ENV
           echo "CC=clang" >> $GITHUB_ENV
           echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
-          
-      - name: 💻 Configure Kernel & Apply Fixes
+
+      - name: 🩹 Apply Legacy Fixes (Optional)
+        if: github.event.inputs.apply_legacy_fixes == true
+        working-directory: ./kernel_source
         run: |
-          cd kernel_source
-          
-          # Remove unsupported -mcpu flags
+          echo "Applying legacy fixes..."
+          # Fix for Python 2 print syntax in Python 3
+          sed -i 's/print(line,, file=sys.stderr)/print(line, file=sys.stderr)/g' scripts/gcc-wrapper.py
+          # Fix for byte string issues in Python 3
+          sed -i "s/line\.rstrip('\\n')/line.decode('utf-8').rstrip('\\n')/g" scripts/gcc-wrapper.py
+          # Remove unsupported CPU flags from Makefile
           sed -i '/-mcpu/d' Makefile
-          
-          # Create output directory and generate initial config
+
+      - name: 🚀 Compile Kernel
+        working-directory: ./kernel_source
+        run: |
+          # Configure the kernel
           make O=out ${{ github.event.inputs.defconfig_name }}
           
-          # Disable problematic stack protector option
-          sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/CONFIG_CC_STACKPROTECTOR_STRONG=n/g' out/.config
-          sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' out/.config
-
-      - name: 💻 Build Kernel
-        id: build_step
-        run: |
-          cd kernel_source
-          # Build with all available cores
+          # Optional fix for stack protector, common on older sources
+          if ${{ github.event.inputs.apply_legacy_fixes }}; then
+              sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/g' out/.config
+          fi
+          
+          # Build the kernel
+          echo "Starting kernel compilation..."
           make O=out -j$(nproc --all)
+          
+          # Verify that the kernel image was built
+          if [ ! -f "out/arch/arm64/boot/${{ github.event.inputs.image_name }}" ]; then
+              echo "Kernel image not found! Build failed."
+              exit 1
+          fi
 
       - name: 📦 Package with AnyKernel3
         run: |
+          echo "Packaging into a flashable zip..."
+          cp kernel_source/out/arch/arm64/boot/${{ github.event.inputs.image_name }} anykernel3/
           cd anykernel3
-          cp ../kernel_source/out/arch/arm64/boot/Image.gz-dtb .
-          zip -r9 ${{ github.event.repository.name }}_${{ github.sha }}.zip . -x .git
+          zip -r9 ${{ github.event.inputs.zip_name }}.zip . -x ".git*" -x "README.md" -x "*placeholder"
           
       - name: ⬆️ Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: custom-kernel
-          path: anykernel3/*.zip
+          name: ${{ github.event.inputs.zip_name }}
+          path: anykernel3/${{ github.event.inputs.zip_name }}.zip
+
+      - name: 📊 Post-Build Summary
+        if: always() # This step will run even if previous steps fail
+        run: |
+          BUILD_END_TIME=$(date +%s)
+          BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
+          echo "========================================"
+          echo "  BUILD SUMMARY"
+          echo "========================================"
+          echo "Status: ${{ job.status }}"
+          echo "Total build time: $((BUILD_DURATION / 60)) minutes and $((BUILD_DURATION % 60)) seconds."
+          echo "========================================"
