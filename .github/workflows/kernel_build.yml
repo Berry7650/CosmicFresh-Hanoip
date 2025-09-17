@@ -59,14 +59,13 @@ jobs:
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc64
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 gcc32
 
-      - name: ⚙️ Set up Environment Variables & Fixes
+      - name: ⚙️ Set up Environment Variables & Apply Fixes
         run: |
           echo "PATH=/usr/bin:$(pwd)/clang-toolchain/bin:$(pwd)/gcc64/bin:$(pwd)/gcc32/bin:$PATH" >> $GITHUB_ENV
           
-          # ⚠️ FIX 1: Patch gcc-wrapper.py for Python 3 string/bytes compatibility
+          # Fix Python 2 print syntax and byte string issues in gcc-wrapper.py
+          sed -i 's/print >> sys.stderr, \([^,]\+\)\(,\)\?/print(\1, file=sys.stderr)/g' ./kernel_source/scripts/gcc-wrapper.py
           sed -i 's/line.rstrip('\''\\n'\'')/line.decode('\''utf-8'\'').rstrip('\''\\n'\'')/g' ./kernel_source/scripts/gcc-wrapper.py
-          # ⚠️ FIX 2: Patch gcc-wrapper.py for Python 3 print syntax
-          sed -i 's/print >> sys.stderr, line/print(line, file=sys.stderr)/g' ./kernel_source/scripts/gcc-wrapper.py
           
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "SUBARCH=arm64" >> $GITHUB_ENV
@@ -78,17 +77,20 @@ jobs:
       - name: 💻 Configure Kernel & Apply Fixes
         run: |
           cd kernel_source
-          # ⚠️ FIX 3: Remove unsupported -mcpu flag
-          sed -i 's/-mcpu=cortex-a76.cortex-a55+crypto//g' Makefile
+          # Remove unsupported -mcpu flags
+          sed -i '/-mcpu/d' Makefile
           
+          # Create the initial .config file
           make O=out ${{ github.event.inputs.defconfig_name }}
           
+          # Fix compiler flag issues by disabling unsupported stack protector
           sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/CONFIG_CC_STACKPROTECTOR_STRONG=n/g' out/.config
           
       - name: 💻 Build Kernel
         id: build_step
         run: |
           cd kernel_source
+          # The build now starts with the corrected files and configuration
           make O=out -j$(nproc --all)
 
       - name: 📦 Package with AnyKernel3
