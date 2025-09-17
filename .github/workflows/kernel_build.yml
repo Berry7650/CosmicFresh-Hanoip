@@ -56,17 +56,14 @@ jobs:
           
       - name: ⚙️ Clone GCC Toolchains
         run: |
-          # 64-bit GCC is needed for arm64
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc64
-          # 32-bit GCC is needed for compat vDSO
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 gcc32
 
-      - name: ⚙️ Set up Environment Variables & Path Fixes
+      - name: ⚙️ Set up Environment Variables & Fixes
         run: |
-          # Prioritize the host system's linker and tools
           echo "PATH=/usr/bin:$(pwd)/clang-toolchain/bin:$(pwd)/gcc64/bin:$(pwd)/gcc32/bin:$PATH" >> $GITHUB_ENV
           
-          # Fix the Python 2 print syntax in gcc-wrapper.py
+          # ⚠️ FIX: Patch the gcc-wrapper.py script for Python 3 compatibility
           sed -i 's/print >> sys.stderr, args[0] + \x27:\x27,e.strerror/print(args[0] + \x27:\x27, e.strerror, file=sys.stderr)/g' ./kernel_source/scripts/gcc-wrapper.py
           
           echo "ARCH=arm64" >> $GITHUB_ENV
@@ -76,10 +73,9 @@ jobs:
           echo "CC=clang" >> $GITHUB_ENV
           echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
           
-      - name: 💻 Configure Kernel & Apply Fixes
+      - name: 💻 Configure Kernel
         run: |
           cd kernel_source
-          # This command creates the 'out' directory and the initial .config file
           make O=out ${{ github.event.inputs.defconfig_name }}
           
           # Fix compiler flag issues by disabling unsupported stack protector
@@ -89,7 +85,6 @@ jobs:
         id: build_step
         run: |
           cd kernel_source
-          # The build starts now with the corrected .config file
           make O=out -j$(nproc --all)
 
       - name: 📦 Package with AnyKernel3
