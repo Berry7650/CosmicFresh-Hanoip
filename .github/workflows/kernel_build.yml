@@ -69,6 +69,12 @@ jobs:
           echo "CC=clang" >> $GITHUB_ENV
           echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
           
+      - name: 💻 Apply Fixes to Defconfig
+        run: |
+          cd kernel_source/out
+          # Disable stack protector to fix the compiler error
+          sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/CONFIG_CC_STACKPROTECTOR_STRONG=n/g' .config
+
       - name: 💻 Build Kernel
         id: build_step
         run: |
