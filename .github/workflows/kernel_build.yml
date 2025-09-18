@@ -1,6 +1,3 @@
-# GitHub Actions Workflow: Final Fixed Custom Kernel Build
-# Corrects all Python 2/3 compatibility issues in legacy build scripts.
-
 name: Final Fixed Custom Kernel Build
 
 on:
@@ -38,7 +35,14 @@ on:
         description: 'Apply specific patches for older kernel sources?'
         type: boolean
         default: true
-
+      include_ksu:
+        description: 'Include KernelSU in the build?'
+        type: boolean
+        default: true
+      include_sosfos:
+        description: 'Include SOSFOS module in the build?'
+        type: boolean
+        default: true
 env:
   TZ: "Asia/Kolkata"
 
@@ -90,16 +94,19 @@ jobs:
           echo "CC=clang" >> $GITHUB_ENV
           echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
           
+      - name: ✨ Add KernelSU Source (Optional)
+        if: github.event.inputs.include_ksu == true
+        working-directory: ./kernel_source
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
+
       - name: 🩹 Apply Legacy Fixes (Optional)
         if: github.event.inputs.apply_legacy_fixes == true
         working-directory: ./kernel_source
         run: |
           echo "Applying comprehensive legacy fixes..."
-          # FIX 1: Convert `print >> stream, var,` (with trailing comma for no newline)
           sed -i "s/print >> sys.stderr, \(.*\),/print(\1, file=sys.stderr, end='')/g" scripts/gcc-wrapper.py
-          # FIX 2: Convert `print >> stream, var` (without trailing comma)
           sed -i "s/print >> sys.stderr, \(.*\)/print(\1, file=sys.stderr)/g" scripts/gcc-wrapper.py
-          # FIX 3: Remove unsupported CPU flags from Makefile
           sed -i '/-mcpu/d' Makefile
           
       - name: 🚀 Compile Kernel
@@ -107,20 +114,33 @@ jobs:
         run: |
           make O=out ${{ github.event.inputs.defconfig_name }}
           
+          if ${{ github.event.inputs.include_ksu }}; then
+            echo "Enabling KernelSU configurations..."
+            echo "CONFIG_KSU=y" >> out/.config
+            echo "CONFIG_KPROBES=y" >> out/.config
+            echo "CONFIG_HAVE_KPROBES=y" >> out/.config
+            echo "CONFIG_KPROBE_EVENTS=y" >> out/.config
+          fi
+          
           if ${{ github.event.inputs.apply_legacy_fixes }}; then
-              echo "Applying legacy .config fixes..."
-              sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' out/.config
-              sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' out/.config
+            echo "Applying legacy .config fixes..."
+            sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' out/.config
+            sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' out/.config
           fi
           
           echo "Starting kernel compilation..."
           make O=out -j$(nproc --all) HOSTCC=gcc
           
           if [ ! -f "out/arch/arm64/boot/${{ github.event.inputs.image_name }}" ]; then
-              echo "Kernel image not found! Build failed."
-              exit 1
+            echo "Kernel image not found! Build failed."
+            exit 1
           fi
 
+      - name: 📦 Add SOSFOS Module to AnyKernel3 (Optional)
+        if: github.event.inputs.include_sosfos == true
+        run: |
+          git clone --depth=1 https://github.com/T-s-s/SOSFOS-KSU-mod anykernel3/
+          
       - name: 📦 Package with AnyKernel3
         run: |
           echo "Packaging into a flashable zip..."
