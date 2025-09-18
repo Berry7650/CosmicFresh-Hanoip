@@ -100,32 +100,22 @@ jobs:
         run: |
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
 
-      - name: 🩹 Apply Comprehensive Python 3 Fixes
+      - name: 🐍 Fix Python 3 Compatibility Issues
         working-directory: ./kernel_source
         run: |
-          echo "Applying comprehensive Python 3 compatibility fixes..."
+          echo "Fixing Python 3 compatibility issues in gcc-wrapper.py..."
           
-          # Fix all Python 2 print statements to Python 3 syntax
-          # First, let's check what print statements exist
-          echo "Current print statements in gcc-wrapper.py:"
-          grep -n "print >>" scripts/gcc-wrapper.py || true
+          # Fix the specific syntax error at line 51
+          sed -i '51s/line = line.decode("utf-8").rstrip("/line = line.decode("utf-8").rstrip("\\n")/' scripts/gcc-wrapper.py
           
-          # Fix all types of print >> statements
-          sed -i 's/print >> sys.stderr, \(.*\),/print(\1, file=sys.stderr, end="")/g' scripts/gcc-wrapper.py
+          # Convert all Python 2 print statements to Python 3 syntax
           sed -i 's/print >> sys.stderr, \(.*\)/print(\1, file=sys.stderr)/g' scripts/gcc-wrapper.py
+          sed -i 's/print >> sys.stderr, \(.*\),/print(\1, file=sys.stderr, end="")/g' scripts/gcc-wrapper.py
           
-          # Additional fix for the specific error pattern we're seeing
-          sed -i 's/print >> sys.stderr, line,/print(line, file=sys.stderr, end="")/g' scripts/gcc-wrapper.py
-          
-          # Fix byte string handling for Python 3
-          sed -i 's/line\.rstrip('\''\\n'\'')/line.decode("utf-8").rstrip("\n")/g' scripts/gcc-wrapper.py
-          
-          # Verify the fixes
-          echo "After fixes, print statements in gcc-wrapper.py:"
-          grep -n "print >>" scripts/gcc-wrapper.py || echo "No more Python 2 print statements found"
-          
-          # Remove unsupported -mcpu flags from Makefile
-          sed -i '/-mcpu/d' Makefile
+          # Add proper import if missing
+          if ! grep -q "import sys" scripts/gcc-wrapper.py; then
+            sed -i '1i import sys' scripts/gcc-wrapper.py
+          fi
 
       - name: 🚀 Compile Kernel
         working-directory: ./kernel_source
