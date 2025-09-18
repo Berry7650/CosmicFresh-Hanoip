@@ -93,22 +93,40 @@ jobs:
           echo "CROSS_COMPILE_ARM32=arm-linux-androideabi-" >> $GITHUB_ENV
           echo "CC=clang" >> $GITHUB_ENV
           echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
-          
+
       - name: ✨ Add KernelSU Source (Optional)
         if: github.event.inputs.include_ksu == true
         working-directory: ./kernel_source
         run: |
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
 
-      - name: 🩹 Apply Legacy Fixes (Optional)
-        if: github.event.inputs.apply_legacy_fixes == true
+      - name: 🩹 Apply Comprehensive Python 3 Fixes
         working-directory: ./kernel_source
         run: |
-          echo "Applying comprehensive legacy fixes..."
-          sed -i "s/print >> sys.stderr, \(.*\),/print(\1, file=sys.stderr, end='')/g" scripts/gcc-wrapper.py
-          sed -i "s/print >> sys.stderr, \(.*\)/print(\1, file=sys.stderr)/g" scripts/gcc-wrapper.py
-          sed -i '/-mcpu/d' Makefile
+          echo "Applying comprehensive Python 3 compatibility fixes..."
           
+          # Fix all Python 2 print statements to Python 3 syntax
+          # First, let's check what print statements exist
+          echo "Current print statements in gcc-wrapper.py:"
+          grep -n "print >>" scripts/gcc-wrapper.py || true
+          
+          # Fix all types of print >> statements
+          sed -i 's/print >> sys.stderr, \(.*\),/print(\1, file=sys.stderr, end="")/g' scripts/gcc-wrapper.py
+          sed -i 's/print >> sys.stderr, \(.*\)/print(\1, file=sys.stderr)/g' scripts/gcc-wrapper.py
+          
+          # Additional fix for the specific error pattern we're seeing
+          sed -i 's/print >> sys.stderr, line,/print(line, file=sys.stderr, end="")/g' scripts/gcc-wrapper.py
+          
+          # Fix byte string handling for Python 3
+          sed -i 's/line\.rstrip('\''\\n'\'')/line.decode("utf-8").rstrip("\n")/g' scripts/gcc-wrapper.py
+          
+          # Verify the fixes
+          echo "After fixes, print statements in gcc-wrapper.py:"
+          grep -n "print >>" scripts/gcc-wrapper.py || echo "No more Python 2 print statements found"
+          
+          # Remove unsupported -mcpu flags from Makefile
+          sed -i '/-mcpu/d' Makefile
+
       - name: 🚀 Compile Kernel
         working-directory: ./kernel_source
         run: |
