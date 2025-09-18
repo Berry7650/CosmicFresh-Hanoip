@@ -1,7 +1,7 @@
-# GitHub Actions Workflow: Enhanced Custom Kernel Build
-# Optimized for performance with caching and increased flexibility.
+# GitHub Actions Workflow: Fixed and Enhanced Custom Kernel Build
+# Corrects compiler path errors and improves compatibility for older kernel sources.
 
-name: Enhanced Custom Kernel Build
+name: Fixed Custom Kernel Build
 
 on:
   workflow_dispatch:
@@ -29,7 +29,7 @@ on:
       zip_name:
         description: 'Name of the final flashable zip (without .zip)'
         required: true
-        default: 'Custom-Kernel'
+        default: 'CosmicFresh-Kernel-Fixed'
       image_name:
         description: 'Name of the kernel image to package'
         required: true
@@ -86,22 +86,22 @@ jobs:
           echo "PATH=$(pwd)/clang-toolchain/bin:$(pwd)/gcc64/bin:$(pwd)/gcc32/bin:$PATH" >> $GITHUB_ENV
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "SUBARCH=arm64" >> $GITHUB_ENV
-          echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
+          # ❗️ CRITICAL FIX: Use 'aarch64-linux-android-' which matches the downloaded GCC toolchain binaries.
+          echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
           echo "CROSS_COMPILE_ARM32=arm-linux-androideabi-" >> $GITHUB_ENV
           echo "CC=clang" >> $GITHUB_ENV
           echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
-
+          
       - name: 🩹 Apply Legacy Fixes (Optional)
         if: github.event.inputs.apply_legacy_fixes == true
         working-directory: ./kernel_source
         run: |
           echo "Applying legacy fixes for Python scripts and Makefile..."
-          # Fix Python 3 compatibility issues in gcc-wrapper.py
+          # FIX 1: Robustly convert Python 2 print statements to Python 3 function calls
           sed -i 's/print >> sys.stderr, \(.*\)/print(\1, file=sys.stderr)/g' scripts/gcc-wrapper.py
-          sed -i "s/line\.rstrip('\\n')/line.decode('utf-8').rstrip('\\n')/g" scripts/gcc-wrapper.py
+          # FIX 2: Handle specific error case in the exception handler
           sed -i "s/args\[0\] + ':'\,e\.strerror/args[0] + ': ' + e.strerror/g" scripts/gcc-wrapper.py
-          
-          # Remove unsupported CPU flags from Makefile
+          # FIX 3: Remove unsupported CPU flags from Makefile
           sed -i '/-mcpu/d' Makefile
           
       - name: 🚀 Compile Kernel
@@ -115,12 +115,11 @@ jobs:
               echo "Applying legacy .config fixes..."
               sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' out/.config
               sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' out/.config
-              sed -i 's/CONFIG_CC_IS_GCC=y/CONFIG_CC_IS_CLANG=y/' out/.config
           fi
           
           # Build the kernel using all available cores
           echo "Starting kernel compilation..."
-          make O=out -j$(nproc --all)
+          make O=out -j$(nproc --all) HOSTCC=gcc
           
           # Verify that the kernel image was built successfully
           if [ ! -f "out/arch/arm64/boot/${{ github.event.inputs.image_name }}" ]; then
