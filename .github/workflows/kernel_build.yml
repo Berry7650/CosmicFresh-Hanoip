@@ -100,22 +100,22 @@ jobs:
         run: |
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
 
-      - name: 🐍 Fix Python 3 Compatibility Issues
-        working-directory: ./kernel_source
-        run: |
-          echo "Fixing Python 3 compatibility issues in gcc-wrapper.py..."
-          
-          # Fix the specific syntax error at line 51
-          sed -i '51s/line = line.decode("utf-8").rstrip("/line = line.decode("utf-8").rstrip("\\n")/' scripts/gcc-wrapper.py
-          
-          # Convert all Python 2 print statements to Python 3 syntax
-          sed -i 's/print >> sys.stderr, \(.*\)/print(\1, file=sys.stderr)/g' scripts/gcc-wrapper.py
-          sed -i 's/print >> sys.stderr, \(.*\),/print(\1, file=sys.stderr, end="")/g' scripts/gcc-wrapper.py
-          
-          # Add proper import if missing
-          if ! grep -q "import sys" scripts/gcc-wrapper.py; then
-            sed -i '1i import sys' scripts/gcc-wrapper.py
-          fi
+     - name: 🐍 Fix Python 3 Compatibility Issues
+  working-directory: ./kernel_source
+  run: |
+    echo "Fixing Python 3 compatibility issues in gcc-wrapper.py..."
+    
+    # Fix the specific syntax error at line 51
+    sed -i '51s/line = line.decode("utf-8").rstrip("/line = line.decode("utf-8").rstrip("\\n")/' scripts/gcc-wrapper.py
+    
+    # Convert all Python 2 print statements to Python 3 syntax
+    sed -i 's/print >> sys.stderr, \(.*\)/print(\1, file=sys.stderr)/g' scripts/gcc-wrapper.py
+    sed -i 's/print >> sys.stderr, \(.*\),/print(\1, file=sys.stderr, end="")/g' scripts/gcc-wrapper.py
+    
+    # Add proper import if missing
+    if ! grep -q "import sys" scripts/gcc-wrapper.py; then
+      sed -i '1i import sys' scripts/gcc-wrapper.py
+    fi
 
       - name: 🚀 Compile Kernel
         working-directory: ./kernel_source
